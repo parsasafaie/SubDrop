@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SubDrop — choose a subtitle file</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    width: 320px; padding: 12px 14px 14px;
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: #1f2328; background: linear-gradient(180deg, #fbfcfd 0%, #f2f4f7 100%);
+  }
+  h1 { margin: 0 0 10px; font-size: 11px; font-weight: 700; letter-spacing: .09em;
+       text-transform: uppercase; color: #8b949e; }
+
+  .drop { border: 1.5px dashed #c3ccd6; border-radius: 12px; padding: 12px;
+          text-align: center; transition: border-color .12s ease, background .12s ease; }
+  .drop.over { border-color: #2f6fd0; background: #f3f6fb; }
+
+  /* Same pattern as the page control: the visible pill is a label, the real input
+     sits transparent on top of it. Nothing native renders — no sharp corners, no
+     "No file selected" text. */
+  .pickwrap { display: block; position: relative; }
+  .pickbtn {
+    display: block; cursor: pointer; text-align: center; white-space: nowrap;
+    font: 600 14px/1 system-ui, -apple-system, sans-serif; color: #fff;
+    background: linear-gradient(180deg, #4a8df0, #2f6fd0);
+    padding: 12px 14px; border-radius: 999px;
+    box-shadow: 0 1px 3px rgba(47,111,208,.45), inset 0 1px 0 rgba(255,255,255,.22);
+  }
+  .pickwrap:hover .pickbtn { filter: brightness(1.07); }
+  .pickwrap:active .pickbtn { filter: brightness(.95); }
+  #file {
+    position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+    opacity: 0; cursor: pointer; margin: 0; padding: 0; border: 0;
+  }
+
+  .hint { margin: 8px 0 0; font-size: 12.5px; color: #8b949e; }
+  .name { margin: 10px 0 0; font-size: 13px; color: #8b949e; min-height: 18px;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .name.set { color: #1a7f37; font-weight: 600; }
+  .err { margin: 9px 0 0; padding: 7px 9px; border-radius: 8px;
+         background: #ffebe9; color: #cf222e; font-size: 13px; line-height: 1.4;
+         border: 1px solid rgba(207,34,46,.14); }
+  .err[hidden] { display: none; }
+</style>
+</head>
+<body>
+  <h1>SubDrop</h1>
+
+  <div id="zone" class="drop">
+    <span class="pickwrap">
+      <label class="pickbtn" for="file">Choose file…</label>
+      <input id="file" type="file" accept=".srt,.vtt,text/vtt,application/x-subrip"
+             aria-label="Choose a subtitle file">
+    </span>
+    <div class="hint">or drop a .srt / .vtt file here</div>
+  </div>
+
+  <div id="name" class="name"></div>
+  <div id="err" class="err" hidden></div>
+
+  <script src="parser.js"></script>
+  <script src="picker.js"></script>
+</body>
+</html>

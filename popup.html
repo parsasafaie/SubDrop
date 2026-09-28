@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SubDrop</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    width: 268px;
+    padding: 14px;
+    font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: #1f2328;
+    background: linear-gradient(180deg, #fbfcfd 0%, #f2f4f7 100%);
+  }
+  h1 { margin: 0 0 11px; font-size: 10.5px; font-weight: 700; letter-spacing: .09em;
+       text-transform: uppercase; color: #8b949e; }
+
+  /* The button opens a small picker window: a browser-action popup is torn down by
+     Firefox the moment a native file dialog opens, so a file input cannot live here. */
+  .pickbtn {
+    all: unset; display: block; cursor: pointer; text-align: center; width: 100%;
+    box-sizing: border-box; white-space: nowrap;
+    font: 600 13px/1 system-ui, -apple-system, "Segoe UI", sans-serif; color: #fff;
+    background: linear-gradient(180deg, #4a8df0, #2f6fd0);
+    padding: 10px 12px; border-radius: 999px;
+    box-shadow: 0 1px 3px rgba(47,111,208,.45), inset 0 1px 0 rgba(255,255,255,.22);
+  }
+  .pickbtn:hover { filter: brightness(1.07); }
+  .pickbtn:active { filter: brightness(.95); }
+
+  .name {
+    margin: 11px 0 0; padding: 0 2px; font-size: 12px; color: #8b949e;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .name::before {
+    content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    background: #d0d7de; margin-right: 6px; vertical-align: 1px;
+  }
+  .name.set { color: #1f2328; font-weight: 500; }
+  .name.set::before { background: #3fb950; box-shadow: 0 0 0 2px rgba(63,185,80,.18); }
+
+  .err { margin: 9px 0 0; padding: 7px 9px; border-radius: 8px;
+         background: #ffebe9; color: #cf222e; font-size: 12px; line-height: 1.45;
+         border: 1px solid rgba(207,34,46,.14); }
+  .err[hidden] { display: none; }
+
+  .tools { margin: 9px 0 0; }
+  .tools[hidden] { display: none; }
+  .offseg { flex: 0 0 auto; }
+  .offseg button { flex: 0 0 30px; font-weight: 600; }
+  .offseg b {
+    flex: 0 0 52px; text-align: center; font: 600 12px/1.2 system-ui, sans-serif;
+    color: #1f2328; font-variant-numeric: tabular-nums; cursor: pointer; padding: 6px 0;
+  }
+  .offseg b.nonzero { color: #2f6fd0; }
+  .linkbtn {
+    all: unset; cursor: pointer; margin-left: auto;
+    font: 500 12px/1.2 system-ui, sans-serif; color: #8b949e; padding: 4px 6px;
+    border-radius: 6px;
+  }
+  .linkbtn:hover { color: #cf222e; background: #ffebe9; }
+
+  .ext { margin: 13px 0 0; padding: 11px 0 0; border-top: 1px solid #e4e8ee; }
+  .ext h2 { margin: 0 0 9px; font-size: 10.5px; font-weight: 700; letter-spacing: .09em;
+            text-transform: uppercase; color: #8b949e; }
+  .crow { display: flex; gap: 6px; align-items: center; }
+  .sel {
+    flex: 1 1 auto; min-width: 0; font: 500 12px/1.2 system-ui, -apple-system, sans-serif;
+    color: #1f2328; background: #fff; border: 1px solid #d0d7de; border-radius: 7px;
+    padding: 6px 8px; cursor: pointer;
+  }
+  .cap { margin: 9px 0 0; padding: 0 2px; font-size: 12px; color: #8b949e; }
+  .cap.bad { color: #cf222e; }
+  .mini {
+    all: unset; display: block; cursor: pointer; box-sizing: border-box; text-align: center;
+    font: 600 12px/1 system-ui, -apple-system, sans-serif; color: #2f6fd0;
+    background: #fff; border: 1px solid #d0d7de; border-radius: 7px;
+    padding: 8px 10px; flex: 1 1 0; transition: background .12s ease, border-color .12s ease;
+  }
+  .mini:hover { background: #f3f6fb; border-color: #b9cdf0; }
+  .mini[disabled] { opacity: .45; cursor: default; }
+  .crow.top { margin: 9px 0 0; }
+  .orule { display: flex; align-items: center; gap: 8px; margin: 12px 0 9px;
+           font-size: 10.5px; font-weight: 600; letter-spacing: .05em;
+           text-transform: uppercase; color: #a0a8b0; }
+  .orule::before, .orule::after { content: ""; flex: 1 1 auto; height: 1px; background: #e4e8ee; }
+  #capUrl { font-size: 12px; color: #1f2328; }
+  #capUrl::placeholder { color: #a0a8b0; }
+  .extbody { margin-top: 10px; }
+  #urlRow[hidden] { display: none; }
+  #capActions[hidden] { display: none; }
+  #langRow[hidden] { display: none; }
+
+  .app { margin: 13px 0 0; padding: 11px 0 0; border-top: 1px solid #e4e8ee; }
+  .app summary {
+    list-style: none; cursor: pointer; user-select: none;
+    font-size: 10.5px; font-weight: 700; letter-spacing: .09em;
+    text-transform: uppercase; color: #8b949e;
+    display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  }
+  .app summary::-webkit-details-marker { display: none; }
+  .app summary::after {
+    content: ""; width: 7px; height: 7px; flex: 0 0 auto;
+    border-right: 1.5px solid #8b949e; border-bottom: 1.5px solid #8b949e;
+    transform: rotate(45deg) translateY(-1px); transition: transform .14s ease;
+  }
+  .app[open] summary::after { transform: rotate(225deg) translateY(-2px); }
+  .arow { display: flex; align-items: center; gap: 8px; margin: 9px 0 0; }
+  .alab { flex: 0 0 62px; font-size: 12px; color: #656d76; }
+  .seg { flex: 1 1 auto; display: flex; border: 1px solid #d0d7de; border-radius: 7px; overflow: hidden; }
+  .seg button {
+    all: unset; flex: 1 1 0; cursor: pointer; text-align: center; padding: 6px 0;
+    font: 500 12px/1.2 system-ui, -apple-system, sans-serif; color: #656d76; background: #fff;
+  }
+  .seg button + button { border-left: 1px solid #d0d7de; }
+  .seg button.on { background: #2f6fd0; color: #fff; font-weight: 600; }
+  .app .sel { flex: 1 1 auto; }
+</style>
+</head>
+<body>
+  <h1>SubDrop</h1>
+
+  <button id="pick" class="pickbtn" type="button">Choose subtitle file</button>
+  <div id="name" class="name">No subtitle selected</div>
+  <div id="err" class="err" hidden></div>
+
+  <div id="tools" class="tools" hidden>
+    <div class="arow">
+      <span class="alab">Offset</span>
+      <span class="seg offseg">
+        <button id="offDown" type="button" title="Nudge subtitles 0.1 s earlier">−</button>
+        <b id="offVal" title="Click to reset">0.0 s</b>
+        <button id="offUp" type="button" title="Nudge subtitles 0.1 s later">+</button>
+      </span>
+      <button id="forget" type="button" title="Forget this subtitle and its offset for this site">Forget</button>
+    </div>
+  </div>
+
+  <details class="app">
+    <summary>Subtitle appearance</summary>
+    <div class="arow">
+      <span class="alab">Colour</span>
+      <span class="seg" id="apColor" role="group" aria-label="Subtitle text colour">
+        <button data-v="white" type="button">White</button><button data-v="black" type="button">Black</button>
+      </span>
+    </div>
+    <div class="arow">
+      <span class="alab">Size</span>
+      <select id="apSize" class="sel" aria-label="Subtitle font size">
+        <option value="0">Auto</option><option value="14">14 px</option>
+        <option value="16">16 px</option><option value="18">18 px</option>
+        <option value="20">20 px</option><option value="24">24 px</option>
+        <option value="28">28 px</option><option value="32">32 px</option>
+        <option value="38">38 px</option>
+      </select>
+    </div>
+    <div class="arow">
+      <span class="alab">Font</span>
+      <select id="apFont" class="sel" aria-label="Subtitle font">
+        <option value="">Auto</option><option value="vazirmatn">Vazirmatn</option>
+        <option value="noto-sans">Noto Sans Arabic</option><option value="noto-naskh">Noto Naskh Arabic</option>
+        <option value="noto-kufi">Noto Kufi Arabic</option><option value="nastaliq">Noto Nastaliq Urdu</option>
+        <option value="tahoma">Tahoma</option><option value="dejavu">DejaVu Sans</option>
+      </select>
+    </div>
+  </details>
+
+  <details id="extBox" class="app">
+    <summary>Extract captions</summary>
+    <div class="extbody">
+      <div id="cap" class="cap">Opening…</div>
+      <div class="crow" id="langRow" hidden>
+        <select id="lang" class="sel" aria-label="Caption language"></select>
+        <button id="extract" class="mini" style="flex:0 0 auto">Extract</button>
+      </div>
+      <div id="capActions" class="crow top" hidden>
+        <button id="copySrt" class="mini">Copy SRT</button>
+        <button id="copyTxt" class="mini">Copy text</button>
+      </div>
+      <div id="urlRow">
+        <div class="orule">or fetch a caption file by URL</div>
+        <div class="crow">
+          <input id="capUrl" class="sel" type="url" spellcheck="false"
+                 placeholder="https://…/captions.vtt" aria-label="Caption file URL">
+          <button id="capGo" class="mini" style="flex:0 0 auto">Fetch</button>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <script src="parser.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

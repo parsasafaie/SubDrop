@@ -7,6 +7,8 @@
 
 var P = globalThis.FaSubParser;
 
+var MAX_SITES = 10;   // same eviction policy as the page's own drop path
+
 var siteKey = '';
 try { siteKey = decodeURIComponent(location.hash.slice(1) || ''); } catch (e) { siteKey = ''; }
 
@@ -56,6 +58,11 @@ function load(file) {
       if (!P.parse(text).length) throw new Error('no subtitles found in ' + name);
       return browser.storage.local.get('sites').then(function (r) {
         var sites = (r && r.sites) || {};
+        var keys = Object.keys(sites);
+        if (!sites[siteKey] && keys.length >= MAX_SITES) {
+          keys.sort(function (a, b) { return (sites[a].ts || 0) - (sites[b].ts || 0); });
+          delete sites[keys[0]];
+        }
         sites[siteKey] = { name: name, text: text, ts: Date.now() };
         return browser.storage.local.set({ sites: sites });
       });

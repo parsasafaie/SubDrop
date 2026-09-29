@@ -48,9 +48,43 @@
       .trim();
   }
 
-  // One cue = the line with "-->" plus everything up to the next blank line.
-  // Blocks with no "-->" (WEBVTT header, NOTE, X-TIMESTAMP-MAP, STYLE) are skipped.
+  // "00:01:02,000 --> 00:01:05,000 align:center position:50%" -> seconds, or
+  // null when the line only looks like a timing line.
+  function timingOf(line) {
+    if (line.indexOf('-->') === -1) return null;
+    var parts = line.split('-->');
+    var start = parseTimestamp((parts[0] || '').trim().split(/\s+/)[0]);
+    var end = parseTimestamp((parts[1] || '').trim().split(/\s+/)[0]);
+    return start !== null && end !== null && end > start ? { start: start, end: end } : null;
+  }
+
+  // One cue = the line with "-->" plus everything up to the next cue start.
   // `offset` shifts every cue — used when stitching HLS subtitle segments together.
+  function parseCue(lines, shift) {
+    var arrowAt = -1, t = null;
+    for (var j = 0; j < lines.length; j++) {
+      var cand = timingOf(lines[j]);
+      if (cand) { arrowAt = j; t = cand; break; }
+    }
+    if (arrowAt === -1) return null;
+
+    var text = cleanText(lines.slice(arrowAt + 1).join(' '));
+    if (!text) return null;
+    return { start: t.start + shift, end: t.end + shift, text: text };
+  }
+
+  // A line begins the next cue — inside a block that already holds one — when it
+  // is an SRT index with a timing line right under it, or a timing line itself.
+  // Requiring parseable times keeps cue text that merely contains "-->" or a
+  // bare number from splitting anything. This rescues files that leave out the
+  // blank line between cues; without it such a file parses as one giant cue.
+  function isCueStart(lines, j) {
+    if (/^\d+\s*$/.test(lines[j])) {
+      return j + 1 < lines.length && timingOf(lines[j + 1]) !== null;
+    }
+    return timingOf(lines[j]) !== null;
+  }
+
   function parse(text, offset) {
     var cues = [];
     if (!text) return cues;
@@ -61,23 +95,17 @@
 
     for (var i = 0; i < blocks.length; i++) {
       var lines = blocks[i].split('\n');
-      var arrowAt = -1;
-      for (var j = 0; j < lines.length; j++) {
-        if (lines[j].indexOf('-->') !== -1) { arrowAt = j; break; }
+      // Well-formed files blank-line separate cues, so a block holds one; files
+      // that omit the blank line are split further on cue starts.
+      var starts = [0];
+      for (var j = 1; j < lines.length; j++) {
+        if (isCueStart(lines, j)) starts.push(j);
       }
-      if (arrowAt === -1) continue;
-
-      var arrow = lines[arrowAt].split('-->');
-      // The right side may carry WebVTT cue settings ("align:center position:50%").
-      var start = parseTimestamp((arrow[0] || '').trim().split(/\s+/)[0]);
-      var end = parseTimestamp((arrow[1] || '').trim().split(/\s+/)[0]);
-      if (start === null || end === null || end <= start) continue;
-
-      var body = lines.slice(arrowAt + 1).join(' ');
-      var text2 = cleanText(body);
-      if (!text2) continue;
-
-      cues.push({ start: start + shift, end: end + shift, text: text2 });
+      for (var s = 0; s < starts.length; s++) {
+        var end = s + 1 < starts.length ? starts[s + 1] : lines.length;
+        var cue = parseCue(lines.slice(starts[s], end), shift);
+        if (cue) cues.push(cue);
+      }
     }
 
     cues.sort(function (a, b) { return a.start - b.start; });
@@ -137,6 +165,17 @@
     return (h ? h + ':' + (m < 10 ? '0' : '') : '') + m + ':' + (sec < 10 ? '0' : '') + sec;
   }
 
+  // Identity of a site for the per-site stores: the origin, or — when the origin
+  // is opaque (file:, sandboxed frames) — the URL minus its fragment. Shared by
+  // the popup, the picker, the background and the content script so every
+  // context keys the same page identically.
+  function siteKeyOfUrl(raw) {
+    var u = null;
+    try { u = new URL(String(raw || '')); } catch (e) { u = null; }
+    if (u && u.origin && u.origin !== 'null') return u.origin;
+    return String(raw || '').split('#')[0];
+  }
+
   globalThis.FaSubParser = {
     decode: decode,
     parse: parse,
@@ -146,6 +185,7 @@
     parseTimestamp: parseTimestamp,
     fmtTime: fmtTime,
     srtTime: srtTime,
-    toSrt: toSrt
+    toSrt: toSrt,
+    siteKeyOfUrl: siteKeyOfUrl
   };
 })();

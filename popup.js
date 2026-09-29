@@ -25,6 +25,7 @@ var forgetEl = document.getElementById('forget');
 var tab = null;
 var siteKey = '';   // which entry in the per-site store this page maps to
 var localErr = '';  // error the popup caught itself, before the page ever saw it
+var pollErr = false;  // the displayed error came from polling, so polling may clear it
 var offset = 0;     // seconds for this site, mirrored into storage
 var extLoaded = false;
 
@@ -126,9 +127,17 @@ function poll() {
             frames.filter(function (f) { return f.cueCount; })[0] ||
             frames[0];
 
-    if (v.error) showError(v.error);
-    else if (localErr) errEl.hidden = false;
-    else clearError();
+    if (v.error) {
+      pollErr = true;
+      showError(v.error);
+    } else if (pollErr) {
+      pollErr = false;   // the polled error is stale: the page answered again
+      clearError();
+    } else if (localErr) {
+      errEl.hidden = false;
+    } else {
+      clearError();
+    }
     setName(v);
     if (typeof v.offset === 'number' && v.offset !== offset) { offset = v.offset; paintOffset(); }
   });
@@ -186,7 +195,8 @@ function extract(i) {
     if (!r || !r.ok) { setCap((r && r.error) || 'could not fetch captions', 'bad'); return; }
     cues = r.cues;
     capActions.hidden = false;
-    setCap(r.cueCount + (r.cueCount === 1 ? ' segment ready to copy' : ' segments ready to copy'));
+    setCap(r.cueCount + (r.cueCount === 1 ? ' segment ready to copy' : ' segments ready to copy') +
+      (r.warning ? ' — ' + r.warning : ''));
   }, function () {
     setCap('could not fetch captions', 'bad');
   });
@@ -287,7 +297,8 @@ capGoEl.addEventListener('click', function () {
     if (!r || !r.ok) { setCap((r && r.error) || 'could not fetch that URL', 'bad'); return; }
     cues = r.cues;
     capActions.hidden = false;
-    setCap(r.cueCount + (r.cueCount === 1 ? ' segment ready to copy' : ' segments ready to copy'));
+    setCap(r.cueCount + (r.cueCount === 1 ? ' segment ready to copy' : ' segments ready to copy') +
+      (r.warning ? ' — ' + r.warning : ''));
   }, function () { setCap('could not fetch that URL', 'bad'); });
 });
 capUrlEl.addEventListener('keydown', function (e) {
@@ -353,9 +364,7 @@ try {
 browser.tabs.query({ active: true, currentWindow: true }).then(function (tabs) {
   tab = tabs[0];
   if (!tab) return;
-  var u = '';
-  try { u = new URL(tab.url || ''); } catch (e) { u = null; }
-  siteKey = (u && u.origin && u.origin !== 'null') ? u.origin : (tab.url || '').split('#')[0];
+  siteKey = P.siteKeyOfUrl(tab.url || '');
   poll();
   setInterval(poll, 500);
   // Extraction is lazy: nothing is fetched until the section is opened.

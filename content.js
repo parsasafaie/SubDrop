@@ -8,14 +8,13 @@
     video: null,
     cues: [],
     activeIdx: -1,
-    offset: 0,       // seconds the user nudged the subtitle by, for this site
+    offset: 0,       // seconds the subtitles are delayed by on this site
     appliedTs: 0,    // timestamp of the last subtitle this frame applied
     overlay: null,
     textEl: null,
     picker: null,
     pickerDot: null,
     pickerText: null,
-    pickerReady: false,
     lastSrc: '',
     lastDur: 0,
     lastRect: '',
@@ -37,6 +36,9 @@
 
   // The first <video> in the DOM is often a hidden preview or an ad; the overlay
   // belongs on the largest one the user can actually see.
+
+  var lastDeepScan = 0;   // timestamp of the last shadow-root sweep
+
   function findVideo() {
     var best = null, bestArea = 0;
     function consider(v) {
@@ -49,6 +51,11 @@
     }
     [].forEach.call(document.querySelectorAll('video'), consider);
     if (best) return best;
+    // The shadow sweep walks up to 3000 elements; throttle it so mutation-heavy
+    // pages without a video do not pay for it on every observer tick.
+    var now = Date.now();
+    if (now - lastDeepScan < 2000) return null;
+    lastDeepScan = now;
     var all = document.querySelectorAll('*');
     for (var i = 0; i < all.length && i < 3000; i++) {
       if (all[i].shadowRoot) {
@@ -154,7 +161,8 @@
 
   function ensureOverlay() {
     ensureStyle();
-    if (state.overlay) return;
+    if (state.overlay && state.overlay.isConnected) return;
+    state.overlay = null;   // the site wiped the old one: build a fresh node
     var ov = document.createElement('div');
     ov.id = '__fa_sub_overlay__';
     var sp = document.createElement('span');
@@ -235,10 +243,12 @@
   var MAX_SITES = 10;
   var MAX_TEXT = 1500000;
 
-  function siteKey() {
-    var o = location.origin;
-    return o && o !== 'null' ? o : location.href.split('#')[0];
-  }
+  // Identity of this page in the per-site stores. A frame defaults to its own
+  // origin, but the canonical key is the tab's origin — a video inside a
+  // cross-origin iframe has to share the entry the popup and picker write
+  // under the tab's address. The background resolves it once at boot.
+  var SITE_KEY = P.siteKeyOfUrl(location.href);
+  function siteKey() { return SITE_KEY; }
 
   function storageGet(key) {
     try { return browser.storage.local.get(key); } catch (e) { return Promise.reject(e); }
@@ -261,27 +271,18 @@
     }).catch(function () { /* storage unavailable: nothing to remember */ });
   }
 
-  function restoreForSite() {
-    if (state.cues.length) return;
+  function restoreSiteEntry() {
+    var key = siteKey();
     storageGet('sites').then(function (r) {
-      var e = r && r.sites && r.sites[siteKey()];
+      if (siteKey() !== key) return;   // the site key moved on mid-read
+      var e = r && r.sites && r.sites[key];
       if (e && e.text && e.ts > state.appliedTs) installCues(e.text, e.name, { ts: e.ts, restored: true });
     }).catch(function () { /* nothing remembered */ });
   }
 
-  function forgetSite() {
-    state.appliedTs = Date.now() + 60000;   // ignore any in-flight storage echo
-    return storageGet(['sites', 'offsets']).then(function (r) {
-      var patch = {};
-      if (r && r.sites && r.sites[siteKey()]) {
-        var s = r.sites; delete s[siteKey()]; patch.sites = s;
-      }
-      if (r && r.offsets && r.offsets[siteKey()]) {
-        var o = r.offsets; delete o[siteKey()]; patch.offsets = o;
-      }
-      state.offset = 0;
-      return Object.keys(patch).length ? storageSet(patch) : Promise.resolve();
-    }).catch(function () { });
+  function restoreForSite() {
+    if (state.cues.length) return;
+    restoreSiteEntry();
   }
 
   function readFile(file) {
@@ -374,6 +375,15 @@
     el.style.lineHeight = String(LINE[APPEARANCE.font] || 1.6);
   }
 
+  function loadOffset() {
+    var key = siteKey();
+    storageGet('offsets').then(function (r) {
+      if (siteKey() !== key) return;   // the site key moved on mid-read
+      var o = r && r.offsets && r.offsets[key];
+      if (typeof o === 'number' && o !== state.offset) { state.offset = o; requestUpdate(); }
+    }).catch(function () { });
+  }
+
   function loadAppearance() {
     storageGet('appearance').then(function (r) {
       if (r && r.appearance) {
@@ -384,10 +394,7 @@
       }
     }).catch(function () { /* storage unavailable: keep the defaults */ });
 
-    storageGet('offsets').then(function (r) {
-      var o = r && r.offsets && r.offsets[siteKey()];
-      if (typeof o === 'number') { state.offset = o; requestUpdate(); }
-    }).catch(function () { });
+    loadOffset();
   }
 
   try {
@@ -425,6 +432,7 @@
   }
 
   function paintPicker() {
+    if (state.picker && !state.picker.isConnected) ensurePicker();   // the site wiped it: put it back
     if (!state.picker) return;
     var s = statusOf();
     state.pickerDot.style.background = s.dot.dot;
@@ -436,8 +444,7 @@
   }
 
   function ensurePicker() {
-    if (state.pickerReady) return;
-    state.pickerReady = true;
+    if (state.picker && state.picker.isConnected) return;
     ensureStyle();
 
     // One slim glass pill: status dot and the current file. Doubles as a drop target.
@@ -608,6 +615,9 @@
       r.left < (window.innerWidth || document.documentElement.clientWidth);
 
     if (!visible) { hideOverlay(); return; }
+    // A site re-render can take the overlay out of the DOM mid-playback; make
+    // sure there is a live node before styling it.
+    if (!state.overlay || !state.overlay.isConnected) ensureOverlay();
 
     // Inside a fullscreen element the offset has to be relative to that element,
     // not the viewport, and position has to be absolute.
@@ -636,7 +646,8 @@
     var sizePx = size.toFixed(1) + 'px';
     if (state.textEl.style.fontSize !== sizePx) state.textEl.style.fontSize = sizePx;
 
-    var t = v.currentTime + state.offset;
+    // state.offset is a delay: positive shows every cue later, VLC-style.
+    var t = v.currentTime - state.offset;
     var live = P.activeCues(state.cues, t, 2);
     var idx = live.length ? state.cues.indexOf(live[0]) : -1;
     if (idx !== state.activeIdx) {
@@ -758,7 +769,9 @@
     if (msg.type === 'clear') {
       state.cues = []; state.activeIdx = -1; state.sourceName = '';
       state.fileKey = ''; state.badKey = ''; state.detail = ''; state.error = '';
-      state.appliedTs = Date.now() + 60000;
+      // Block storage echoes of what was just cleared; anything picked after
+      // this moment carries a newer timestamp and loads normally.
+      state.appliedTs = Date.now();
       hideOverlay();
       paintPicker();
       return Promise.resolve({ ok: true, cueCount: 0 });
@@ -777,4 +790,16 @@
   loadAppearance();
   restoreForSite();
   requestUpdate();
+
+  // Adopt the tab's canonical site key, then re-read what the frame's own key
+  // may have missed — the entry a video in a cross-origin iframe needs lives
+  // under the tab's origin, invisible to the frame's fallback key.
+  try {
+    browser.runtime.sendMessage({ type: 'getSiteKey' }).then(function (r) {
+      if (!r || !r.key || r.key === SITE_KEY) return;
+      SITE_KEY = r.key;
+      restoreSiteEntry();
+      loadOffset();
+    }).catch(function () { /* background unreachable: keep the frame's key */ });
+  } catch (e) { /* messaging unavailable: keep the frame's key */ }
 })();

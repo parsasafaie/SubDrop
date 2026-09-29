@@ -3,6 +3,7 @@
 var P = globalThis.FaSubParser;
 
 var pickEl = document.getElementById('pick');
+var pasteEl = document.getElementById('paste');
 var nameEl = document.getElementById('name');
 var errEl = document.getElementById('err');
 var extBoxEl = document.getElementById('extBox');
@@ -28,6 +29,7 @@ var localErr = '';  // error the popup caught itself, before the page ever saw i
 var pollErr = false;  // the displayed error came from polling, so polling may clear it
 var offset = 0;     // seconds for this site, mirrored into storage
 var extLoaded = false;
+var MAX_SITES = 10; // same eviction policy as the picker window and the page's drop path
 
 // Firefox resolves with one response per frame when no frameId is given; Chrome
 // resolves with a single one. Normalise both.
@@ -111,6 +113,75 @@ pickEl.addEventListener('click', function () {
     window.close();   // hand focus to the picker window
   }).catch(function (e) {
     showError('could not open the picker window');
+  });
+});
+
+// ------------------------------------------------------- paste from clipboard
+//
+// The AI workflow ends with "save the result as .srt and load it" — this button
+// removes the save step: copy the subtitle text anywhere, then load it straight
+// onto the video. The text is validated here and written into the per-site
+// store, the same popup-crash-immune channel the picker window uses, so the
+// page picks it up whether or not this popup is still alive.
+
+// Firefox before 125 has no navigator.clipboard.readText; with clipboardRead an
+// extension page may still paste into a focused editable and read it back.
+function pasteViaCommand() {
+  return new Promise(function (resolve) {
+    var ta = document.createElement('textarea');
+    ta.setAttribute('style', 'position:fixed;left:-9999px;top:0;');
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    var done = false;
+    try { done = document.execCommand('paste'); } catch (e) { done = false; }
+    var text = done ? ta.value : null;
+    ta.remove();
+    resolve(text);
+  });
+}
+
+function readClipboard() {
+  try {
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      return navigator.clipboard.readText().then(null, function () {
+        return pasteViaCommand();
+      });
+    }
+  } catch (e) { /* fall through to the paste command */ }
+  return pasteViaCommand();
+}
+
+function persistPasted(text) {
+  return storageGet('sites').then(function (r) {
+    var sites = (r && r.sites) || {};
+    var keys = Object.keys(sites);
+    if (!sites[siteKey] && keys.length >= MAX_SITES) {
+      keys.sort(function (a, b) { return (sites[a].ts || 0) - (sites[b].ts || 0); });
+      delete sites[keys[0]];
+    }
+    sites[siteKey] = { name: 'Clipboard', text: text, ts: Date.now() };
+    return storageSet({ sites: sites });
+  });
+}
+
+pasteEl.addEventListener('click', function () {
+  if (!siteKey) { showError('Open the popup on the video page first.'); return; }
+  readClipboard().then(function (text) {
+    if (text === null) { showError('could not read the clipboard'); return; }
+    var trimmed = (text || '').replace(/^\uFEFF/, '').trim();
+    if (!trimmed) { showError('the clipboard is empty'); return; }
+    var parsed;
+    try { parsed = P.parse(trimmed, 0); } catch (e) { parsed = []; }
+    if (!parsed.length) { showError('the clipboard holds no SRT/VTT subtitle text'); return; }
+    clearError();
+    return persistPasted(trimmed).then(function () {
+      nameEl.textContent = 'Clipboard · ' + parsed.length + (parsed.length === 1 ? ' cue' : ' cues');
+      nameEl.className = 'name set';
+      poll();
+    });
+  }).catch(function () {
+    showError('could not read the clipboard');
   });
 });
 

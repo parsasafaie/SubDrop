@@ -44,6 +44,7 @@ It can also **extract the site's own captions** so you can copy them, translate 
   3. TextTracks that only fill once enabled (players like YouTube/Vimeo)
   4. **Manual URL** — if none of those exist, give it a subtitle file URL to fetch
 - **Copy as SRT or plain text** — the SRT output is loadable again as-is
+- **Paste from clipboard** — subtitle text copied anywhere (the AI's answer, for example) loads straight onto the video, no file needed
 - **Fullscreen** — the overlay moves inside the fullscreen element so it stays visible
 
 ## Install (temporary)
@@ -58,6 +59,8 @@ After changing any code you must Remove and Load the add-on again. To rebuild th
 
 **Loading a subtitle file:** click **Choose subtitle file** in the popup — a small window opens; pick a file or drop one there. The window closes itself and the subtitle lands on the video. (You can also drop a file straight onto the status chip in the page corner.)
 
+**Pasting subtitle text:** if the subtitle text is already on your clipboard — the AI's answer, for example — hit **Paste from clipboard** in the popup and it loads without saving a file. The text is checked first: anything without valid SRT/VTT timestamps is rejected with a message, and whatever is on the video stays untouched.
+
 Why a window? Firefox tears the browser-action popup down the moment a native file dialog opens; a separate window avoids that entirely.
 
 **The AI workflow:**
@@ -65,7 +68,7 @@ Why a window? Firefox tears the browser-action popup down the moment a native fi
 1. Popup → **Extract captions** → pick a language
 2. Hit **Copy SRT**
 3. Give the text to your AI and ask it to translate only the caption lines, leaving the timestamps untouched
-4. Save the result as `.srt` and load it with **Choose subtitle file**
+4. Copy the result and hit **Paste from clipboard** — done, no file to save. (You can still save it as `.srt` and load it with **Choose subtitle file**.)
 
 ## Limitations
 
@@ -75,7 +78,7 @@ Why a window? Firefox tears the browser-action popup down the moment a native fi
 
 ## Privacy
 
-Nothing is sent anywhere and nothing is tracked. The only network request is fetching a subtitle file you asked for (caption extraction). Subtitles and settings are stored locally only.
+Nothing is sent anywhere and nothing is tracked. The only network request is fetching a subtitle file you asked for (caption extraction). Subtitles and settings are stored locally only. The clipboard is read only at the moment you press **Paste from clipboard**, and what it holds never leaves your machine.
 
 ## Layout
 

@@ -47,13 +47,13 @@ It can also **extract the site's own captions** so you can copy them, translate 
 - **Paste from clipboard** — subtitle text copied anywhere (the AI's answer, for example) loads straight onto the video, no file needed
 - **Fullscreen** — the overlay moves inside the fullscreen element so it stays visible
 
-## Install (temporary)
+## Install
 
-1. Open `about:debugging#/runtime/this-firefox`
-2. **Load Temporary Add-on…** → pick `dist/subdrop-0.4.xpi` (the `manifest.json` works too)
-3. Refresh the video tab
+SubDrop lives on the official Firefox Add-ons store:
 
-After changing any code you must Remove and Load the add-on again. To rebuild the installable file, run `./build.sh`.
+1. Open [addons.mozilla.org](https://addons.mozilla.org) and find **SubDrop**
+2. Click **Add to Firefox** and confirm
+3. Refresh the video tab — done
 
 ## Usage
 
@@ -89,7 +89,6 @@ content.js      overlay, syncing, status chip, per-site memory
 popup.html/js   popup
 picker.html/js  file picker window
 background.js   cross-origin subtitle fetching
-build.sh        builds the installable .xpi
 docs/           images
 ```
 

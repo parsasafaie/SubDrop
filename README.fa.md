@@ -59,11 +59,11 @@ SubDrop همون حلقهٔ گم‌شده‌ست: هر متنی که ترجمه 
 
 ## نصب
 
-۱. برو به `about:debugging#/runtime/this-firefox`
-۲. **Load Temporary Add-on…** رو بزن و فایل `dist/subdrop-0.4.xpi` رو انتخاب کن (فایل `manifest.json` هم قبوله)
-۳. تب ویدیو رو refresh کن
+SubDrop توی فروشگاه رسمی افزودنی‌های فایرفاکس هست:
 
-هر بار که کد عوض شد، باید Remove و Load دوباره انجام بدی. برای ساخت دوبارهٔ xpi هم کافیه `./build.sh` رو اجرا کنی.
+۱. صفحهٔ افزونه رو توی [addons.mozilla.org](https://addons.mozilla.org) باز کن — **SubDrop** رو جست‌وجو کن
+۲. **Add to Firefox** رو بزن و تأیید کن
+۳. تب ویدیو رو refresh کن — تمام
 
 ## طرز استفاده
 
@@ -99,7 +99,6 @@ content.js       نمایش زیرنویس، هماهنگی، نوار وضعی�
 popup.html/js    پاپ‌آپ
 picker.html/js   پنجرهٔ انتخاب فایل
 background.js    گرفتن فایل زیرنویس از دامنه‌های دیگه
-build.sh         ساخت فایل نصب
 docs/            تصاویر
 ```
 
